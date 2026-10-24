@@ -1,0 +1,1225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Stash Scout</title>
+<meta name="description" content="Snap a collectible, identify it with AI, and look up what it sells for.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Stash Scout">
+<meta name="theme-color" content="#1C2454">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one-column phone app; header band on top, tab bar pinned to the bottom, grading-slab label as the signature element. */
+:root {
+  --bg: #EEF0F6;
+  --surface: #FFFFFF;
+  --sunk: #E3E6F0;
+  --ink: #161B33;
+  --muted: #5B6380;
+  --line: #D4D8E5;
+  --accent: #2F4FD8;
+  --accent-ink: #FFFFFF;
+  --slab: #E8B007;
+  --slab-ink: #1C2454;
+  --band: #1C2454;
+  --band-ink: #F1F3FA;
+  --good: #1F8A55;
+  --warn: #B86E00;
+  --bad: #C8323A;
+  --font-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Figtree", -apple-system, system-ui, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --radius: 14px;
+  --tabbar-h: 62px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0D1020;
+    --surface: #171B31;
+    --sunk: #0A0D1A;
+    --ink: #E8EAF4;
+    --muted: #9AA1BE;
+    --line: #2A3050;
+    --accent: #7D95FF;
+    --accent-ink: #0D1020;
+    --slab: #F2C230;
+    --slab-ink: #141A3C;
+    --band: #141A3C;
+    --band-ink: #E8EAF4;
+    --good: #4CC487;
+    --warn: #F0A63A;
+    --bad: #FF6B72;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.45 var(--font-body);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100vh;
+  padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 24px);
+}
+img { max-width: 100%; display: block; }
+[hidden] { display: none !important; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* Header band */
+.top {
+  background: var(--band);
+  color: var(--band-ink);
+  padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  padding-bottom: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.brand { font-family: var(--font-display); font-stretch: 75%; font-weight: 850; font-size: 1.55rem; letter-spacing: .01em; text-transform: uppercase; line-height: 1; }
+.brand span { color: var(--slab); }
+.top-sub { font-size: .8rem; opacity: .75; }
+
+main {
+  max-width: 640px; margin: 0 auto;
+  padding-top: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.view { display: grid; gap: 16px; }
+
+h1, h2, h3 { font-family: var(--font-display); font-stretch: 80%; line-height: 1.1; margin: 0; text-wrap: balance; }
+h1 { font-size: 1.9rem; font-weight: 850; }
+h2 { font-size: 1.35rem; font-weight: 800; }
+h3 { font-size: 1.05rem; font-weight: 750; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: .88rem; }
+.eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; min-width: 0; }
+
+/* Buttons */
+.btn {
+  appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 12px; padding: 12px 16px; font-weight: 650; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; text-decoration: none;
+}
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.danger { color: var(--bad); }
+.btn.danger.armed { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn.block { width: 100%; }
+.btn[disabled] { opacity: .55; pointer-events: none; }
+.btn svg { width: 20px; height: 20px; flex: none; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row > .btn { flex: 1 1 140px; }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 650; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Fields */
+label.field { display: grid; gap: 6px; font-weight: 600; font-size: .9rem; min-width: 0; }
+.field input, .field select, .field textarea {
+  width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 10px;
+  padding: 11px 12px; font-size: 16px; font-weight: 500; min-height: 46px;
+}
+.field textarea { min-height: 84px; resize: vertical; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 420px) { .grid2 { grid-template-columns: 1fr; } }
+.check { display: flex; align-items: center; gap: 12px; font-weight: 600; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); cursor: pointer; min-height: 48px; }
+.check input { width: 22px; height: 22px; accent-color: var(--accent); margin: 0; }
+.hint { font-size: .84rem; color: var(--muted); }
+.hint.ai { color: var(--good); }
+
+/* Scan start */
+.shutter-wrap { display: grid; justify-items: center; gap: 14px; padding: 28px 16px 22px; text-align: center; }
+.shutter {
+  width: 148px; height: 148px; border-radius: 50%; border: 8px solid var(--slab);
+  background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; cursor: pointer;
+  box-shadow: 0 0 0 6px var(--surface), 0 10px 30px rgb(0 0 0 / .18);
+}
+.shutter svg { width: 58px; height: 58px; }
+.shutter:active { transform: scale(.97); }
+.type-row { display: flex; gap: 8px; }
+.type-row input { flex: 1; min-width: 0; }
+.examples { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: .78rem; font-weight: 650; padding: 4px 10px; border-radius: 999px; background: var(--sunk); color: var(--muted); border: 1px solid var(--line); }
+
+/* Photo + status */
+.photo { width: 100%; max-height: 52vh; object-fit: contain; border-radius: 12px; background: var(--sunk); }
+.status { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+.spinner { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.5s; } }
+.notice { border-left: 4px solid var(--warn); padding: 10px 12px; background: var(--sunk); border-radius: 0 10px 10px 0; }
+.notice.bad { border-left-color: var(--bad); }
+
+/* Item editor: slab label */
+.slab { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: var(--surface); }
+.slab-label { background: var(--slab); color: var(--slab-ink); display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; }
+.slab-title { font-family: var(--font-display); font-stretch: 75%; font-weight: 850; font-size: 1.15rem; line-height: 1.1; text-transform: uppercase; min-width: 0; overflow-wrap: anywhere; }
+.slab-sub { font-size: .8rem; font-weight: 600; opacity: .85; margin-top: 2px; }
+.slab-grade { text-align: center; border-left: 2px solid rgb(0 0 0 / .18); padding-left: 12px; }
+.slab-grade b { display: block; font-family: var(--font-mono); font-size: 1.6rem; line-height: 1; }
+.slab-grade small { font-size: .66rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.slab-window { padding: 14px; display: grid; place-items: center; background: var(--sunk); }
+.slab-window img { max-height: 300px; border-radius: 6px; }
+.slab-window .noimg { color: var(--muted); font-size: .9rem; padding: 20px; }
+
+/* Price card */
+.price-main { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.price-big { font-family: var(--font-mono); font-weight: 600; font-size: 2.3rem; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.range { font-family: var(--font-mono); font-size: .95rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; font-size: .72rem; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid currentColor; }
+.pill.high { color: var(--good); } .pill.medium { color: var(--warn); } .pill.low { color: var(--bad); }
+.rangebar { position: relative; height: 8px; border-radius: 99px; background: var(--sunk); }
+.rangebar i { position: absolute; top: -4px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 3px solid var(--surface); transform: translateX(-50%); }
+.sales { list-style: none; margin: 0; padding: 0; display: grid; }
+.sales li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: .9rem; }
+.sales li span { min-width: 0; overflow-wrap: anywhere; }
+.sales li b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.sales li small { grid-column: 1 / -1; color: var(--muted); font-size: .78rem; }
+.sources { display: flex; flex-wrap: wrap; gap: 6px; }
+.sources a { font-size: .78rem; color: var(--accent); text-decoration: none; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stale { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: var(--sunk); border: 1px dashed var(--warn); border-radius: 10px; padding: 10px 12px; font-size: .9rem; font-weight: 600; }
+.check-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.check-links a { font-size: .85rem; font-weight: 650; color: var(--accent); }
+.search-chips { min-height: 0; }
+
+/* Collection */
+.totals { background: var(--band); color: var(--band-ink); border-radius: var(--radius); padding: 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: end; }
+.totals .eyebrow { color: var(--band-ink); opacity: .7; }
+.totals .total { font-family: var(--font-mono); font-weight: 600; font-size: 2.1rem; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.totals .meta { text-align: right; font-size: .85rem; opacity: .85; font-variant-numeric: tabular-nums; }
+.gain { font-weight: 700; }
+.toolbar { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.toolbar input, .toolbar select { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 11px 12px; font-size: 16px; min-height: 46px; min-width: 0; }
+.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.item { display: grid; grid-template-columns: 60px 1fr auto; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px; cursor: pointer; text-align: left; width: 100%; }
+.item img, .item .ph { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; background: var(--sunk); }
+.item .ph { display: grid; place-items: center; color: var(--muted); font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; }
+.item-name { font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.item-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.tag { font-size: .7rem; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--sunk); color: var(--muted); }
+.tag.grade { background: var(--slab); color: var(--slab-ink); font-family: var(--font-mono); }
+.tag.auto { background: transparent; border: 1px solid var(--good); color: var(--good); }
+.item-val { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.item-val small { display: block; font-family: var(--font-body); font-weight: 500; font-size: .72rem; color: var(--muted); }
+.empty { text-align: center; padding: 32px 16px; display: grid; gap: 10px; justify-items: center; }
+.sample-badge { font-size: .7rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); }
+
+/* Settings */
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.keyrow { display: flex; gap: 8px; }
+.keyrow input { flex: 1; min-width: 0; }
+.ok { color: var(--good); font-weight: 650; }
+.err { color: var(--bad); font-weight: 650; }
+
+/* Tab bar */
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  background: var(--surface); border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.tabs button { appearance: none; border: 0; background: none; height: var(--tabbar-h); display: grid; place-items: center; align-content: center; gap: 3px; font-size: .72rem; font-weight: 700; color: var(--muted); cursor: pointer; }
+.tabs button svg { width: 24px; height: 24px; }
+.tabs button[aria-current="page"] { color: var(--accent); }
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 14px);
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 650; font-size: .9rem;
+  max-width: calc(100% - 32px); box-shadow: 0 8px 24px rgb(0 0 0 / .25);
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <div class="brand">Stash <span>Scout</span></div>
+    <div class="top-sub" id="top-sub">Snap it. Name it. Price it.</div>
+  </div>
+</header>
+
+<main>
+  <!-- SCAN -->
+  <section class="view" id="v-scan">
+    <div class="card" id="setup-card" hidden>
+      <span class="eyebrow">One-time setup</span>
+      <h2>Connect Google Gemini</h2>
+      <p class="muted small">Stash Scout uses Google's Gemini AI to recognize items and search the web for prices. You need a free API key. It is saved only on this phone.</p>
+      <ol class="steps small">
+        <li>Open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> and sign in with a Google account.</li>
+        <li>Tap <b>Create API key</b>, then copy it.</li>
+        <li>Paste it below and tap <b>Save</b>.</li>
+      </ol>
+      <div class="keyrow field">
+        <input id="setup-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your API key">
+        <button class="btn primary" id="setup-save" type="button">Save</button>
+      </div>
+      <p class="small" id="setup-msg" aria-live="polite"></p>
+    </div>
+
+    <div id="scan-start" class="view">
+      <div class="card shutter-wrap">
+        <label class="shutter" for="cam" aria-label="Take a photo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="4"/></svg>
+        </label>
+        <input id="cam" type="file" accept="image/*" capture="environment" hidden>
+        <input id="lib" type="file" accept="image/*" hidden>
+        <h1>Scan a collectible</h1>
+        <p class="muted small">Fill the frame with the item in good light. Show the cover, card front, or box front, where the title or number is easy to read.</p>
+        <label class="btn" for="lib">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>
+          Choose from photos
+        </label>
+      </div>
+      <form class="card" id="type-form">
+        <h3>Or type what it is</h3>
+        <div class="type-row field">
+          <input id="type-input" type="text" placeholder="e.g. X-Men #233 comic book" autocomplete="off" enterkeyhint="search">
+          <button class="btn primary" type="submit">Go</button>
+        </div>
+        <div class="examples"><span class="chip">Comics</span><span class="chip">Action figures</span><span class="chip">K-pop merch</span><span class="chip">Trading cards</span><span class="chip">Coins</span><span class="chip">Funko Pops</span><span class="chip">Vinyl</span><span class="chip">Video games</span></div>
+      </form>
+    </div>
+
+    <div id="scan-busy" class="card" hidden>
+      <img class="photo" id="busy-photo" alt="Your photo">
+      <div class="status"><div class="spinner"></div><span id="busy-text">Identifying…</span></div>
+    </div>
+
+    <div id="scan-help" class="view" hidden>
+      <div class="card">
+        <img class="photo" id="help-photo" alt="Your photo">
+        <div class="notice" id="help-notice">
+          <b>I couldn't identify this one.</b>
+          <p class="small" id="help-msg"></p>
+        </div>
+        <div class="row">
+          <label class="btn primary" for="cam">Retake photo</label>
+          <label class="btn" for="lib">Choose another</label>
+        </div>
+      </div>
+      <form class="card" id="help-form">
+        <h3>Or tell me what it is</h3>
+        <p class="muted small">Be specific: title, issue or number, character or member, and year if you know it.</p>
+        <div class="type-row field">
+          <input id="help-input" type="text" placeholder="e.g. Yuqi K-pop album photocard" autocomplete="off" enterkeyhint="go">
+          <button class="btn primary" type="submit">Go</button>
+        </div>
+      </form>
+      <button class="linkish" type="button" id="help-cancel">Start over</button>
+    </div>
+  </section>
+
+  <!-- ITEM -->
+  <section class="view" id="v-item" hidden>
+    <div class="slab">
+      <div class="slab-label">
+        <div>
+          <div class="slab-title" id="slab-title"></div>
+          <div class="slab-sub" id="slab-sub"></div>
+        </div>
+        <div class="slab-grade"><b id="slab-grade"></b><small id="slab-grade-name"></small></div>
+      </div>
+      <div class="slab-window" id="slab-window"></div>
+    </div>
+
+    <div class="card">
+      <label class="field">Item name
+        <input id="f-name" type="text" autocomplete="off">
+      </label>
+      <p class="hint" id="f-details"></p>
+      <div class="grid2">
+        <label class="field">Type
+          <select id="f-cat"></select>
+        </label>
+        <label class="field"><span id="f-cond-label">Condition</span>
+          <select id="f-cond"></select>
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" id="f-auto"> Autographed</label>
+      <p class="hint ai" id="auto-hint" hidden></p>
+    </div>
+
+    <div class="card" id="price-card">
+      <div class="price-main">
+        <h2>Market value</h2>
+        <span id="price-conf"></span>
+      </div>
+      <div id="price-loading" class="status" hidden><div class="spinner"></div><span>Searching recent sales…</span></div>
+      <div id="price-error" class="notice bad" hidden>
+        <b>Price search failed.</b>
+        <p class="small" id="price-error-msg"></p>
+        <div class="row" style="margin-top:8px"><button class="btn" type="button" id="price-retry">Try again</button></div>
+      </div>
+      <div id="price-result" class="view" hidden>
+        <div>
+          <div class="price-big" id="price-typical"></div>
+          <div class="range" id="price-range"></div>
+        </div>
+        <div class="rangebar" aria-hidden="true"><i id="price-dot"></i></div>
+        <div id="price-stale" class="stale" hidden>
+          <span>Condition or details changed since this price.</span>
+          <button class="btn primary" type="button" id="price-update">Update price</button>
+        </div>
+        <p class="small" id="price-summary"></p>
+        <div id="sales-wrap">
+          <span class="eyebrow">Comparable sales</span>
+          <ul class="sales" id="price-sales"></ul>
+        </div>
+        <div id="sources-wrap" class="view" style="gap:6px">
+          <span class="eyebrow">Sources</span>
+          <div class="sources" id="price-sources"></div>
+        </div>
+        <div class="search-chips" id="search-chips"></div>
+        <p class="hint" id="price-when"></p>
+      </div>
+      <div class="view" style="gap:6px">
+        <span class="eyebrow">Check it yourself</span>
+        <div class="check-links" id="check-links"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="grid2">
+        <label class="field">What I paid (USD)
+          <input id="f-paid" type="text" inputmode="decimal" placeholder="Optional" autocomplete="off">
+        </label>
+        <label class="field">Value I use (USD)
+          <input id="f-value" type="text" inputmode="decimal" placeholder="Uses market value" autocomplete="off">
+        </label>
+      </div>
+      <label class="field">Notes
+        <textarea id="f-notes" placeholder="Where you bought it, box condition, storage spot…"></textarea>
+      </label>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" type="button" id="btn-save">Save to collection</button>
+      <button class="btn" type="button" id="btn-discard">Discard</button>
+    </div>
+    <button class="btn danger block" type="button" id="btn-delete" hidden>Delete from collection</button>
+  </section>
+
+  <!-- COLLECTION -->
+  <section class="view" id="v-collection" hidden>
+    <div class="totals">
+      <span class="eyebrow">Collection value</span>
+      <span class="eyebrow" style="text-align:right" id="tot-count"></span>
+      <span class="total" id="tot-value">$0</span>
+      <span class="meta" id="tot-paid"></span>
+    </div>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Search your scans" autocomplete="off" enterkeyhint="search" aria-label="Search your scans">
+      <select id="sort" aria-label="Sort">
+        <option value="new">Newest</option>
+        <option value="value">Highest value</option>
+        <option value="name">A–Z</option>
+      </select>
+    </div>
+    <ul class="items" id="items"></ul>
+    <div class="empty card" id="empty" hidden>
+      <h2 id="empty-title">No scans yet</h2>
+      <p class="muted small" id="empty-msg">Items you save show up here with their value, so you can search them later.</p>
+      <button class="btn primary" type="button" id="empty-scan">Scan your first item</button>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view" id="v-settings" hidden>
+    <div class="card" id="install-card" hidden>
+      <h3>Add Stash Scout to your Home Screen</h3>
+      <p class="small muted">It opens full screen like an app, and Safari keeps your collection safe. Websites that are not on the Home Screen can have their saved data cleared after a few weeks of not being used.</p>
+      <ol class="steps small">
+        <li>Tap the <b>Share</b> button in Safari.</li>
+        <li>Tap <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Gemini API key</h3>
+      <div class="keyrow field">
+        <input id="set-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your API key">
+        <button class="btn primary" type="button" id="set-key-save">Save</button>
+      </div>
+      <p class="small" id="set-key-msg" aria-live="polite"></p>
+      <p class="hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. On Google's free tier, Google may use what you send to improve its products. Turning on billing for the key stops that.</p>
+    </div>
+    <div class="card">
+      <h3>AI model</h3>
+      <label class="field">Model
+        <select id="set-model"><option value="">Automatic (newest Flash)</option></select>
+      </label>
+      <p class="hint" id="set-model-msg"></p>
+    </div>
+    <div class="card">
+      <h3>Backup</h3>
+      <p class="small muted">Your collection is stored only on this phone. Save a backup file now and then, especially before switching phones.</p>
+      <div class="row">
+        <button class="btn" type="button" id="btn-export">Save backup</button>
+        <label class="btn" for="import-file">Restore backup</label>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+      <p class="small" id="backup-msg" aria-live="polite"></p>
+    </div>
+  </section>
+</main>
+
+<nav class="tabs" aria-label="Main">
+  <button type="button" data-tab="scan" aria-current="page">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="4"/></svg>
+    Scan
+  </button>
+  <button type="button" data-tab="collection">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+    Collection
+  </button>
+  <button type="button" data-tab="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    Settings
+  </button>
+</nav>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+'use strict';
+
+/* ---------- Categories and grading scales ---------- */
+// Each scale lists grades best → worst. `def` marks the near-mint default.
+const CATEGORIES = {
+  comic: {
+    label: 'Comic book', condLabel: 'Grade (CGC)', sources: 'GoCollect, CGC census/price data, eBay sold listings, Heritage Auctions, ComicsPriceGuide, MyComicShop',
+    grades: [
+      ['10.0', 'Gem Mint'], ['9.9', 'Mint'], ['9.8', 'Near Mint/Mint'], ['9.6', 'Near Mint+'], ['9.4', 'Near Mint', 1],
+      ['9.2', 'Near Mint-'], ['9.0', 'Very Fine/Near Mint'], ['8.5', 'Very Fine+'], ['8.0', 'Very Fine'], ['7.5', 'Very Fine-'],
+      ['7.0', 'Fine/Very Fine'], ['6.5', 'Fine+'], ['6.0', 'Fine'], ['5.5', 'Fine-'], ['5.0', 'Very Good/Fine'],
+      ['4.5', 'Very Good+'], ['4.0', 'Very Good'], ['3.5', 'Very Good-'], ['3.0', 'Good/Very Good'], ['2.5', 'Good+'],
+      ['2.0', 'Good'], ['1.8', 'Good-'], ['1.5', 'Fair/Good'], ['1.0', 'Fair'], ['0.5', 'Poor']
+    ]
+  },
+  trading_card: {
+    label: 'Trading card', condLabel: 'Grade (PSA)', sources: 'eBay sold listings, PSA price guide/APR, 130point, PriceCharting, TCGplayer, Card Ladder',
+    grades: [
+      ['PSA 10', 'Gem Mint'], ['PSA 9', 'Mint'], ['PSA 8', 'Near Mint-Mint'], ['PSA 7', 'Near Mint', 1], ['PSA 6', 'Excellent-Mint'],
+      ['PSA 5', 'Excellent'], ['PSA 4', 'Very Good-Excellent'], ['PSA 3', 'Very Good'], ['PSA 2', 'Good'], ['PSA 1', 'Poor']
+    ]
+  },
+  kpop: {
+    label: 'K-pop merch', condLabel: 'Condition', sources: 'eBay sold listings, Mercari, Pocamarket, Twitter/X K-pop trade posts, Kpop Albums sellers, Ktown4u',
+    grades: [
+      ['Sealed', 'Factory sealed'], ['M', 'Mint'], ['NM', 'Near Mint', 1], ['EX', 'Excellent (light wear)'],
+      ['VG', 'Very Good (visible wear)'], ['G', 'Good (creases/dents)'], ['P', 'Poor (damaged)']
+    ]
+  },
+  action_figure: {
+    label: 'Action figure / toy', condLabel: 'Condition (C-scale)', sources: 'eBay sold listings, Hake\'s, Heritage Auctions, AFA/CAS graded sales, WorthPoint',
+    grades: [
+      ['C10', 'Mint, sealed on card/box (MOC/MIB)'], ['C9', 'Near Mint, in package', 1], ['C8', 'Excellent, in package'],
+      ['C7', 'Very Good, in package'], ['C6', 'Good, package wear'], ['C5', 'Fair, package damage'],
+      ['LC', 'Loose, complete'], ['LI', 'Loose, incomplete']
+    ]
+  },
+  funko: {
+    label: 'Funko Pop', condLabel: 'Box condition', sources: 'eBay sold listings, PriceCharting, HobbyDB / Pop Price Guide',
+    grades: [
+      ['M', 'Mint box'], ['NM', 'Near Mint box', 1], ['MD', 'Minor box damage'], ['XD', 'Major box damage'], ['OOB', 'Out of box']
+    ]
+  },
+  coin: {
+    label: 'Coin', condLabel: 'Grade (Sheldon)', sources: 'PCGS price guide, NGC price guide, Greysheet, Heritage Auctions, eBay sold listings',
+    grades: [
+      ['MS-70', 'Perfect Mint State'], ['MS-67', 'Superb Gem Uncirculated'], ['MS-65', 'Gem Uncirculated'], ['MS-63', 'Choice Uncirculated'],
+      ['MS-60', 'Uncirculated'], ['AU-58', 'Choice About Uncirculated (near mint)', 1], ['AU-55', 'Choice About Uncirculated'],
+      ['AU-50', 'About Uncirculated'], ['XF-45', 'Choice Extremely Fine'], ['XF-40', 'Extremely Fine'], ['VF-35', 'Choice Very Fine'],
+      ['VF-30', 'Very Fine'], ['VF-20', 'Very Fine'], ['F-12', 'Fine'], ['VG-8', 'Very Good'], ['G-4', 'Good'], ['AG-3', 'About Good'], ['P-1', 'Poor']
+    ]
+  },
+  vinyl: {
+    label: 'Vinyl record', condLabel: 'Grade (Goldmine)', sources: 'Discogs marketplace sales history, Popsike, eBay sold listings',
+    grades: [
+      ['M', 'Mint / sealed'], ['NM', 'Near Mint', 1], ['VG+', 'Very Good Plus'], ['VG', 'Very Good'], ['G+', 'Good Plus'], ['G', 'Good'], ['P', 'Poor']
+    ]
+  },
+  video_game: {
+    label: 'Video game', condLabel: 'Condition', sources: 'PriceCharting, eBay sold listings, Heritage (WATA/VGA graded)',
+    grades: [
+      ['New', 'New / sealed'], ['CIB-NM', 'Complete in box, Near Mint', 1], ['CIB', 'Complete in box, used'],
+      ['Box+Game', 'Game and box, no manual'], ['Loose', 'Loose cartridge/disc'], ['Poor', 'Damaged']
+    ]
+  },
+  other: {
+    label: 'Other collectible', condLabel: 'Condition', sources: 'eBay sold listings, WorthPoint, Heritage Auctions, LiveAuctioneers',
+    grades: [
+      ['M', 'Mint'], ['NM', 'Near Mint', 1], ['EX', 'Excellent'], ['VG', 'Very Good'], ['G', 'Good'], ['F', 'Fair'], ['P', 'Poor']
+    ]
+  }
+};
+const defaultGrade = cat => (CATEGORIES[cat].grades.find(g => g[2]) || CATEGORIES[cat].grades[0])[0];
+const gradeInfo = (cat, v) => (CATEGORIES[cat] || CATEGORIES.other).grades.find(g => g[0] === v);
+const gradeText = (cat, v) => { const g = gradeInfo(cat, v); return g ? `${g[1]} (${g[0]})` : v; };
+
+/* ---------- Small helpers ---------- */
+const $ = id => document.getElementById(id);
+const usd0 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+const usd2 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = n => (n == null || isNaN(n)) ? '—' : (Math.abs(n) < 100 && n % 1 ? usd2 : usd0).format(n);
+const num = v => { if (v == null || v === '') return null; const n = parseFloat(String(v).replace(/[^0-9.\-]/g, '')); return isFinite(n) ? n : null; };
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
+};
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+/* ---------- Local database (IndexedDB) ---------- */
+const DB = (() => {
+  let dbp;
+  function open() {
+    if (!dbp) dbp = new Promise((res, rej) => {
+      const r = indexedDB.open('stash-scout', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('items', { keyPath: 'id' });
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+    return dbp;
+  }
+  async function tx(mode, fn) {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const t = db.transaction('items', mode);
+      const out = fn(t.objectStore('items'));
+      t.oncomplete = () => res(out && 'result' in out ? out.result : undefined);
+      t.onerror = () => rej(t.error);
+    });
+  }
+  return {
+    all: () => tx('readonly', s => s.getAll()),
+    put: item => tx('readwrite', s => s.put(item)),
+    del: id => tx('readwrite', s => s.delete(id))
+  };
+})();
+
+/* ---------- Gemini ---------- */
+const API = 'https://generativelanguage.googleapis.com/v1beta';
+const apiKey = () => store.get('ss_key') || '';
+
+class AiError extends Error {}
+
+async function api(path, opts = {}) {
+  let res;
+  try {
+    res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey(), ...(opts.headers || {}) } });
+  } catch {
+    throw new AiError('No internet connection. Check your signal and try again.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data?.error?.message || '';
+    const err = new AiError(
+      res.status === 400 && /api key/i.test(msg) ? 'Google rejected the API key. Check it in Settings.' :
+      res.status === 403 ? 'This API key is not allowed to use Gemini. Create a new key at aistudio.google.com/apikey.' :
+      res.status === 429 ? 'You hit Google\'s free usage limit. Wait a minute and try again.' :
+      res.status >= 500 ? 'Google\'s AI service is busy right now. Try again in a moment.' :
+      (msg || `Request failed (${res.status}).`)
+    );
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+// Ranks a model name so the newest stable Flash wins; returns -1 for models we don't want.
+function modelScore(name) {
+  const id = name.replace(/^models\//, '');
+  if (/lite|image|tts|audio|live|embed|robot|computer|8b|thinking|learnlm|gemma|aqa|veo|imagen|exp/i.test(id)) return -1;
+  if (id === 'gemini-flash-latest') return 10000;
+  const m = id.match(/^gemini-(\d+(?:\.\d+)?)-flash/);
+  if (!m) return -1;
+  return parseFloat(m[1]) * 100 + (/preview/.test(id) ? 0 : 50) - (id.length / 1000);
+}
+
+let modelListCache = null;
+async function listModels() {
+  if (modelListCache) return modelListCache;
+  const data = await api('/models?pageSize=1000');
+  modelListCache = (data.models || [])
+    .filter(m => (m.supportedGenerationMethods || []).includes('generateContent') && /^models\/gemini-/.test(m.name))
+    .map(m => ({ id: m.name.replace(/^models\//, ''), label: m.displayName || m.name }));
+  return modelListCache;
+}
+
+async function currentModel(forceRefresh) {
+  const chosen = store.get('ss_model');
+  if (chosen) return chosen;
+  const cached = store.get('ss_auto_model');
+  if (cached && !forceRefresh) return cached;
+  let best = 'gemini-2.5-flash';
+  try {
+    const models = await listModels();
+    const ranked = models.map(m => [m.id, modelScore(m.id)]).filter(x => x[1] >= 0).sort((a, b) => b[1] - a[1]);
+    if (ranked.length) best = ranked[0][0];
+  } catch (e) {
+    if (e.status) throw e; // bad key etc.
+  }
+  store.set('ss_auto_model', best);
+  return best;
+}
+
+async function generate(body) {
+  let model = await currentModel();
+  try {
+    return await api(`/models/${model}:generateContent`, { method: 'POST', body: JSON.stringify(body) });
+  } catch (e) {
+    // The saved automatic model may have been retired; look again once.
+    if ((e.status === 404 || e.status === 400 && /model/i.test(e.message)) && !store.get('ss_model')) {
+      modelListCache = null;
+      model = await currentModel(true);
+      return api(`/models/${model}:generateContent`, { method: 'POST', body: JSON.stringify(body) });
+    }
+    throw e;
+  }
+}
+
+function responseText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  return parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
+}
+
+function parseJson(text) {
+  const cleaned = text.replace(/```(?:json)?/gi, '');
+  const a = cleaned.indexOf('{'), b = cleaned.lastIndexOf('}');
+  if (a < 0 || b < a) throw new AiError('The AI gave an answer I could not read. Try again.');
+  try { return JSON.parse(cleaned.slice(a, b + 1)); }
+  catch { throw new AiError('The AI gave an answer I could not read. Try again.'); }
+}
+
+const CAT_KEYS = Object.keys(CATEGORIES);
+
+async function identify({ image, hint }) {
+  const prompt = `You identify collectibles for a price-lookup app.
+${hint ? `The owner says this item is: "${hint}". Trust that, and use the photo (if any) to fill in specifics like variant, edition, and whether it is signed.` : 'Identify the item in the photo.'}
+
+Reply with JSON only, in this shape:
+{
+  "identified": boolean,
+  "confidence": number from 0 to 1,
+  "name": "specific searchable title, the way a seller would list it, e.g. 'Uncanny X-Men #233 (1988, Marvel)' or 'ITZY Yuna Checkmate album photocard (Ver. A)'",
+  "category": one of ${JSON.stringify(CAT_KEYS)},
+  "details": "short extra facts: publisher or maker, year, variant, edition, character or member, card number",
+  "autographed": boolean,
+  "signature_note": "if autographed, where the signature is and whose it appears to be; otherwise empty",
+  "condition_guess": "short note on visible wear, or empty",
+  "needs": "if not identified: one short instruction for a better photo, e.g. 'Show the front cover so the issue number is readable'. Otherwise empty."
+}
+
+Rules:
+- "identified" is true only if you can name the specific item well enough to look up its price (exact title and issue number, exact figure and line, exact member and album or version, coin year and mint mark, and so on). Something generic like "a comic book" or "a K-pop photocard" is not identified.
+- "autographed" is true only when a handwritten signature is clearly visible on the item itself. Printed signatures that are part of the product design do not count.
+- K-pop albums, photocards, lightsticks, and other K-pop goods use category "kpop". Pokémon, sports, Magic and other cards use "trading_card".`;
+
+  const parts = [];
+  if (image) parts.push({ inlineData: { mimeType: 'image/jpeg', data: image } });
+  parts.push({ text: prompt });
+  const data = await generate({
+    contents: [{ role: 'user', parts }],
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
+  });
+  const r = parseJson(responseText(data));
+  if (!CAT_KEYS.includes(r.category)) r.category = 'other';
+  return r;
+}
+
+async function priceLookup(item) {
+  const cat = CATEGORIES[item.category] || CATEGORIES.other;
+  const prompt = `Search the web for what this collectible currently sells for, in US dollars.
+
+Item: ${item.name}
+Type: ${cat.label}
+${item.details ? `Details: ${item.details}\n` : ''}Condition: ${gradeText(item.category, item.condition)} on the ${cat.condLabel} scale
+Autographed: ${item.autographed ? 'yes (price it as a signed copy)' : 'no'}
+
+Prefer recent sold prices over asking prices. Good sources for this type: ${cat.sources}.
+Adjust for the condition above. A raw (ungraded) item sells for less than a professionally graded one at the same grade, so if most sales you find are graded, say so and estimate for the condition given.
+
+Reply with JSON only, no other text:
+{
+  "low": number,
+  "typical": number,
+  "high": number,
+  "confidence": "high" | "medium" | "low",
+  "summary": "one or two plain sentences on how you got this range and what moves the price",
+  "sales": [ { "title": "listing title", "price": number, "date": "e.g. Sep 2026, or empty", "source": "site name" } ],
+  "search_query": "the best short eBay search phrase for this exact item"
+}
+List up to 5 real comparable sales in "sales". If you find little data, give your best estimate and set confidence to "low".`;
+
+  const data = await generate({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0.3 }
+  });
+  const r = parseJson(responseText(data));
+  const gm = data?.candidates?.[0]?.groundingMetadata || {};
+  const seen = new Set();
+  const sources = (gm.groundingChunks || [])
+    .map(c => c.web).filter(w => w && w.uri)
+    .filter(w => { const k = w.title || w.uri; if (seen.has(k)) return false; seen.add(k); return true; })
+    .slice(0, 8).map(w => ({ uri: w.uri, title: w.title || 'Source' }));
+  const vals = [num(r.low), num(r.typical), num(r.high)];
+  let [low, typical, high] = vals;
+  if (typical == null && low != null && high != null) typical = (low + high) / 2;
+  if (low == null) low = typical; if (high == null) high = typical;
+  if (low != null && high != null && low > high) [low, high] = [high, low];
+  return {
+    low, typical, high,
+    confidence: ['high', 'medium', 'low'].includes(r.confidence) ? r.confidence : 'low',
+    summary: r.summary || '',
+    sales: Array.isArray(r.sales) ? r.sales.slice(0, 5).map(s => ({ title: s.title || '', price: num(s.price), date: s.date || '', source: s.source || '' })) : [],
+    query: r.search_query || item.name,
+    sources,
+    searchHtml: gm.searchEntryPoint?.renderedContent || '',
+    basis: { name: item.name, condition: item.condition, autographed: !!item.autographed, category: item.category },
+    at: Date.now()
+  };
+}
+
+/* ---------- Photos ---------- */
+function loadImage(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { res(img); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('That file could not be opened as a photo.')); };
+    img.src = url;
+  });
+}
+function resize(img, max, quality) {
+  const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(img, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', quality);
+}
+
+/* ---------- Views ---------- */
+let current = 'scan';
+function show(view) {
+  current = view;
+  for (const v of ['scan', 'item', 'collection', 'settings']) $('v-' + v).hidden = v !== view;
+  const tab = view === 'item' ? (draft && draft.saved ? 'collection' : 'scan') : view;
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
+  if (view === 'collection') renderCollection();
+  if (view === 'settings') renderSettings();
+  if (view === 'scan') renderScanSetup();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.tab === 'scan') resetScan();
+  show(b.dataset.tab);
+}));
+
+/* ---------- Scan flow ---------- */
+let pending = null; // { image (base64), thumb (dataURL) } for the photo being identified
+
+function scanStage(stage) {
+  $('scan-start').hidden = stage !== 'start';
+  $('scan-busy').hidden = stage !== 'busy';
+  $('scan-help').hidden = stage !== 'help';
+}
+function resetScan() { pending = null; scanStage('start'); $('type-input').value = ''; $('help-input').value = ''; }
+
+function renderScanSetup() {
+  const need = !apiKey();
+  $('setup-card').hidden = !need;
+  $('scan-start').style.opacity = need ? .45 : 1;
+  $('scan-start').style.pointerEvents = need ? 'none' : '';
+}
+
+async function onPhoto(file) {
+  if (!file) return;
+  if (!apiKey()) { show('scan'); return; }
+  show('scan');
+  let img;
+  try { img = await loadImage(file); } catch (e) { toast(e.message); return; }
+  pending = { image: resize(img, 1280, 0.85).split(',')[1], thumb: resize(img, 400, 0.75) };
+  $('busy-photo').src = pending.thumb;
+  await runIdentify();
+}
+for (const id of ['cam', 'lib']) {
+  $(id).addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; onPhoto(f); });
+}
+
+async function runIdentify(hint) {
+  $('busy-photo').hidden = !pending;
+  if (pending) $('busy-photo').src = pending.thumb;
+  $('busy-text').textContent = hint ? `Looking up “${hint}”…` : 'Identifying…';
+  scanStage('busy');
+  try {
+    const r = await identify({ image: pending?.image, hint });
+    if (!hint && (!r.identified || (r.confidence ?? 0) < 0.55)) {
+      $('help-photo').src = pending.thumb;
+      $('help-notice').className = 'notice';
+      $('help-notice').querySelector('b').textContent = r.name && r.identified !== false ? `This might be ${r.name}, but I'm not sure.` : 'I couldn\'t identify this one.';
+      $('help-msg').textContent = (r.needs || 'Try a closer, well-lit photo of the front.') + ' You can also type what it is below.';
+      scanStage('help');
+      return;
+    }
+    openDraft({
+      id: uid(), saved: false, createdAt: Date.now(),
+      name: r.name || hint, details: r.details || '', category: r.category,
+      condition: defaultGrade(r.category),
+      autographed: !!r.autographed, aiSignature: r.autographed ? (r.signature_note || 'A signature is visible in the photo.') : '',
+      conditionNote: r.condition_guess || '',
+      thumb: pending?.thumb || '', notes: '', paid: null, value: null, price: null
+    });
+    fetchPrice();
+  } catch (e) {
+    $('help-photo').hidden = !pending;
+    if (pending) $('help-photo').src = pending.thumb;
+    $('help-notice').className = 'notice bad';
+    $('help-notice').querySelector('b').textContent = 'Something went wrong.';
+    $('help-msg').textContent = e.message || String(e);
+    scanStage('help');
+  }
+}
+
+$('type-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('type-input').value.trim();
+  if (!v) return;
+  if (!apiKey()) return;
+  pending = null;
+  runIdentify(v);
+});
+$('help-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('help-input').value.trim();
+  if (v) runIdentify(v);
+});
+$('help-cancel').addEventListener('click', resetScan);
+
+/* ---------- Item editor ---------- */
+let draft = null;
+let priceToken = 0;
+
+$('f-cat').innerHTML = CAT_KEYS.map(k => `<option value="${k}">${esc(CATEGORIES[k].label)}</option>`).join('');
+
+function fillGrades() {
+  const cat = CATEGORIES[draft.category] || CATEGORIES.other;
+  $('f-cond-label').textContent = cat.condLabel;
+  $('f-cond').innerHTML = cat.grades.map(([v, l, d]) => `<option value="${esc(v)}">${esc(v === l ? l : `${v} · ${l}`)}${d ? ' (default)' : ''}</option>`).join('');
+  $('f-cond').value = draft.condition;
+}
+
+function openDraft(d) {
+  draft = d;
+  $('f-name').value = d.name;
+  $('f-cat').value = d.category;
+  fillGrades();
+  $('f-auto').checked = !!d.autographed;
+  $('f-paid').value = d.paid ?? '';
+  $('f-value').value = d.value ?? '';
+  $('f-notes').value = d.notes || '';
+  $('btn-save').textContent = d.saved ? 'Save changes' : 'Save to collection';
+  $('btn-discard').textContent = d.saved ? 'Back' : 'Discard';
+  $('btn-delete').hidden = !d.saved;
+  disarmDelete();
+  renderSlab();
+  renderPrice();
+  show('item');
+}
+
+function renderSlab() {
+  const g = gradeInfo(draft.category, draft.condition);
+  $('slab-title').textContent = draft.name || 'Untitled item';
+  $('slab-sub').textContent = [CATEGORIES[draft.category]?.label, draft.autographed ? 'Autographed' : ''].filter(Boolean).join(' · ');
+  $('slab-grade').textContent = g ? g[0] : draft.condition;
+  $('slab-grade-name').textContent = g ? (g[0] === g[1] ? '' : g[1].replace(/\s*\(.*\)/, '')) : '';
+  $('slab-window').innerHTML = draft.thumb ? `<img src="${draft.thumb}" alt="Photo of ${esc(draft.name)}">` : '<div class="noimg">No photo</div>';
+  const det = [draft.details, draft.conditionNote ? `Visible condition: ${draft.conditionNote}` : ''].filter(Boolean).join(' · ');
+  $('f-details').textContent = det;
+  $('f-details').hidden = !det;
+  $('auto-hint').hidden = !draft.aiSignature;
+  $('auto-hint').textContent = draft.aiSignature ? `AI spotted a signature: ${draft.aiSignature}` : '';
+  renderCheckLinks();
+}
+
+function renderCheckLinks() {
+  const q = encodeURIComponent((draft.price?.query || draft.name || '') + (draft.autographed ? ' signed' : ''));
+  const links = [
+    ['eBay sold listings', `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1`],
+    ['Google', `https://www.google.com/search?q=${q}+price`]
+  ];
+  if (['comic', 'trading_card', 'funko', 'video_game'].includes(draft.category)) links.splice(1, 0, ['PriceCharting', `https://www.pricecharting.com/search-products?q=${q}&type=prices`]);
+  if (draft.category === 'vinyl') links.splice(1, 0, ['Discogs', `https://www.discogs.com/search/?q=${q}&type=all`]);
+  if (draft.category === 'coin') links.splice(1, 0, ['PCGS', `https://www.pcgs.com/search?q=${q}`]);
+  if (draft.category === 'comic') links.splice(1, 0, ['GoCollect', `https://gocollect.com/search?q=${q}`]);
+  $('check-links').innerHTML = links.map(([t, u]) => `<a href="${u}" target="_blank" rel="noopener">${t} ↗</a>`).join('');
+}
+
+function isStale() {
+  const b = draft.price?.basis;
+  return !!b && (b.name !== draft.name || b.condition !== draft.condition || b.autographed !== !!draft.autographed);
+}
+
+function renderPrice(state) {
+  const p = draft.price;
+  $('price-loading').hidden = state !== 'loading';
+  $('price-error').hidden = state !== 'error';
+  $('price-result').hidden = !p || state === 'loading';
+  $('price-conf').innerHTML = p && state !== 'loading' ? `<span class="pill ${p.confidence}">${p.confidence} confidence</span>` : '';
+  if (!p) {
+    if (!state) { $('price-error').hidden = false; $('price-error-msg').textContent = 'No price yet.'; }
+    return;
+  }
+  $('price-typical').textContent = money(p.typical);
+  $('price-range').textContent = p.low != null ? `Range ${money(p.low)} – ${money(p.high)}` : '';
+  const span = (p.high ?? 0) - (p.low ?? 0);
+  $('price-dot').style.left = (span > 0 ? Math.min(100, Math.max(0, ((p.typical - p.low) / span) * 100)) : 50) + '%';
+  $('price-summary').textContent = p.summary;
+  $('price-stale').hidden = !isStale();
+  $('sales-wrap').hidden = !p.sales.length;
+  $('price-sales').innerHTML = p.sales.map(s => `<li><span>${esc(s.title)}</span><b>${money(s.price)}</b>${(s.source || s.date) ? `<small>${esc([s.source, s.date].filter(Boolean).join(' · '))}</small>` : ''}</li>`).join('');
+  $('sources-wrap').hidden = !p.sources.length;
+  $('price-sources').innerHTML = p.sources.map(s => `<a href="${esc(s.uri)}" target="_blank" rel="noopener">${esc(s.title)}</a>`).join('');
+  // Google asks apps that use Search grounding to show its search suggestions.
+  const chips = $('search-chips');
+  if (!chips.shadowRoot) chips.attachShadow({ mode: 'open' });
+  chips.shadowRoot.innerHTML = p.searchHtml || '';
+  const b = p.basis;
+  $('price-when').textContent = `Priced ${new Date(p.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} for ${gradeText(b.category, b.condition)}${b.autographed ? ', autographed' : ''}. AI estimates can be wrong, so check recent sales before buying or selling.`;
+}
+
+async function fetchPrice() {
+  const token = ++priceToken;
+  const target = draft;
+  renderPrice('loading');
+  try {
+    const p = await priceLookup(target);
+    if (token !== priceToken || draft !== target) return;
+    target.price = p;
+    renderPrice();
+    renderCheckLinks();
+  } catch (e) {
+    if (token !== priceToken || draft !== target) return;
+    $('price-error-msg').textContent = e.message || String(e);
+    renderPrice('error');
+  }
+}
+$('price-retry').addEventListener('click', fetchPrice);
+$('price-update').addEventListener('click', fetchPrice);
+
+$('f-name').addEventListener('input', () => { draft.name = $('f-name').value.trim(); $('slab-title').textContent = draft.name || 'Untitled item'; if (draft.price) $('price-stale').hidden = !isStale(); });
+$('f-name').addEventListener('change', renderCheckLinks);
+$('f-cat').addEventListener('change', () => {
+  draft.category = $('f-cat').value;
+  draft.condition = defaultGrade(draft.category);
+  fillGrades(); renderSlab(); if (draft.price) renderPrice();
+});
+$('f-cond').addEventListener('change', () => { draft.condition = $('f-cond').value; renderSlab(); if (draft.price) renderPrice(); });
+$('f-auto').addEventListener('change', () => { draft.autographed = $('f-auto').checked; renderSlab(); if (draft.price) renderPrice(); });
+$('f-paid').addEventListener('input', () => { draft.paid = num($('f-paid').value); });
+$('f-value').addEventListener('input', () => { draft.value = num($('f-value').value); });
+$('f-notes').addEventListener('input', () => { draft.notes = $('f-notes').value; });
+
+$('btn-save').addEventListener('click', async () => {
+  if (!draft.name) { toast('Give the item a name first.'); $('f-name').focus(); return; }
+  const wasSaved = draft.saved;
+  draft.saved = true; draft.updatedAt = Date.now();
+  try {
+    await DB.put(JSON.parse(JSON.stringify(draft)));
+  } catch {
+    draft.saved = wasSaved; toast('Could not save. Your phone may be out of storage.'); return;
+  }
+  navigator.storage?.persist?.().catch(() => {});
+  toast(wasSaved ? 'Changes saved' : 'Saved to your collection');
+  draft = null;
+  if (wasSaved) show('collection'); else { resetScan(); show('collection'); }
+});
+$('btn-discard').addEventListener('click', () => {
+  const wasSaved = draft?.saved;
+  priceToken++; draft = null;
+  if (wasSaved) show('collection'); else { resetScan(); show('scan'); }
+});
+
+let deleteTimer;
+function disarmDelete() { clearTimeout(deleteTimer); $('btn-delete').classList.remove('armed'); $('btn-delete').textContent = 'Delete from collection'; }
+$('btn-delete').addEventListener('click', async () => {
+  const b = $('btn-delete');
+  if (!b.classList.contains('armed')) {
+    b.classList.add('armed'); b.textContent = 'Tap again to delete';
+    deleteTimer = setTimeout(disarmDelete, 3500);
+    return;
+  }
+  disarmDelete();
+  await DB.del(draft.id);
+  draft = null;
+  toast('Deleted');
+  show('collection');
+});
+
+/* ---------- Collection ---------- */
+let items = [];
+const itemValue = it => it.value ?? it.price?.typical ?? null;
+
+async function renderCollection() {
+  try { items = await DB.all(); } catch { items = []; }
+  const total = items.reduce((s, it) => s + (itemValue(it) || 0), 0);
+  const paidItems = items.filter(it => it.paid != null);
+  const paid = paidItems.reduce((s, it) => s + it.paid, 0);
+  const paidValue = paidItems.reduce((s, it) => s + (itemValue(it) || 0), 0);
+  $('tot-value').textContent = usd0.format(total);
+  $('tot-count').textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+  if (paidItems.length) {
+    const gain = paidValue - paid;
+    $('tot-paid').innerHTML = `Paid ${usd0.format(paid)}<br><span class="gain">${gain >= 0 ? '+' : '−'}${usd0.format(Math.abs(gain))}</span> on those`;
+  } else $('tot-paid').textContent = '';
+  renderList();
+}
+
+function renderList() {
+  const q = $('search').value.trim().toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  let list = items.filter(it => {
+    if (!words.length) return true;
+    const hay = [it.name, it.details, it.notes, CATEGORIES[it.category]?.label, it.condition, gradeInfo(it.category, it.condition)?.[1], it.autographed ? 'autographed signed' : ''].join(' ').toLowerCase();
+    return words.every(w => hay.includes(w));
+  });
+  const sort = $('sort').value;
+  list.sort(sort === 'value' ? (a, b) => (itemValue(b) || 0) - (itemValue(a) || 0)
+    : sort === 'name' ? (a, b) => a.name.localeCompare(b.name)
+    : (a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  $('items').innerHTML = list.map(it => {
+    const v = itemValue(it);
+    const g = gradeInfo(it.category, it.condition);
+    return `<li><button class="item" type="button" data-id="${esc(it.id)}">
+      ${it.thumb ? `<img src="${it.thumb}" alt="">` : `<span class="ph">${esc((it.name || '?')[0].toUpperCase())}</span>`}
+      <span style="min-width:0">
+        <span class="item-name">${esc(it.name)}</span>
+        <span class="item-meta"><span class="tag grade">${esc(g ? g[0] : it.condition)}</span><span class="tag">${esc(CATEGORIES[it.category]?.label || 'Other')}</span>${it.autographed ? '<span class="tag auto">Signed</span>' : ''}</span>
+      </span>
+      <span class="item-val">${money(v)}<small>${new Date(it.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</small></span>
+    </button></li>`;
+  }).join('');
+  const empty = !list.length;
+  $('empty').hidden = !empty;
+  $('empty-title').textContent = items.length ? 'No matches' : 'No scans yet';
+  $('empty-msg').textContent = items.length ? `Nothing in your collection matches “${$('search').value.trim()}”.` : 'Items you save show up here with their value, so you can search them later.';
+  $('empty-scan').hidden = !!items.length;
+}
+$('search').addEventListener('input', renderList);
+$('sort').addEventListener('change', renderList);
+$('items').addEventListener('click', e => {
+  const b = e.target.closest('.item'); if (!b) return;
+  const it = items.find(x => x.id === b.dataset.id);
+  if (it) openDraft(JSON.parse(JSON.stringify(it)));
+});
+$('empty-scan').addEventListener('click', () => { resetScan(); show('scan'); });
+
+/* ---------- Settings ---------- */
+async function saveKey(input, msgEl) {
+  const k = input.value.trim();
+  if (!k) { msgEl.className = 'small err'; msgEl.textContent = 'Paste a key first.'; return false; }
+  msgEl.className = 'small muted'; msgEl.textContent = 'Checking the key…';
+  const old = apiKey();
+  store.set('ss_key', k); store.set('ss_auto_model', null); modelListCache = null;
+  try {
+    const m = await currentModel(true);
+    msgEl.className = 'small ok'; msgEl.textContent = `Key works. Using ${m}.`;
+    input.value = '';
+    return true;
+  } catch (e) {
+    store.set('ss_key', old || null);
+    msgEl.className = 'small err'; msgEl.textContent = e.message;
+    return false;
+  }
+}
+$('setup-save').addEventListener('click', async () => {
+  if (await saveKey($('setup-key'), $('setup-msg'))) { renderScanSetup(); toast('Connected. Ready to scan.'); }
+});
+$('set-key-save').addEventListener('click', () => saveKey($('set-key'), $('set-key-msg')));
+
+async function renderSettings() {
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone = window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  $('install-card').hidden = !isIOS || standalone;
+  const k = apiKey();
+  $('set-key').placeholder = k ? `Saved (ends in ${k.slice(-4)}). Paste to replace.` : 'Paste your API key';
+  if (!$('set-key-msg').textContent) $('set-key-msg').textContent = '';
+  const sel = $('set-model');
+  const chosen = store.get('ss_model') || '';
+  $('set-model-msg').textContent = k ? `Currently using ${store.get('ss_model') || store.get('ss_auto_model') || 'the newest Flash model'}. Flash is fast and covered by the free tier. Pro models are slower and have tighter free limits.` : 'Add an API key to see the models available to you.';
+  if (!k) return;
+  try {
+    const models = await listModels();
+    const opts = models.filter(m => modelScore(m.id) >= 0 || /^gemini-[\d.]+-pro/.test(m.id) || m.id.endsWith('-latest'))
+      .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
+    sel.innerHTML = '<option value="">Automatic (newest Flash)</option>' + opts.map(m => `<option value="${esc(m.id)}">${esc(m.label)} (${esc(m.id)})</option>`).join('');
+    sel.value = opts.some(m => m.id === chosen) ? chosen : '';
+  } catch {}
+}
+$('set-model').addEventListener('change', () => {
+  store.set('ss_model', $('set-model').value || null);
+  renderSettings();
+  toast('Model updated');
+});
+
+$('btn-export').addEventListener('click', async () => {
+  const all = await DB.all();
+  const json = JSON.stringify({ app: 'stash-scout', version: 1, exportedAt: new Date().toISOString(), items: all });
+  const name = `stash-scout-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const file = new File([json], name, { type: 'application/json' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Stash Scout backup' });
+      $('backup-msg').className = 'small ok'; $('backup-msg').textContent = `Backup of ${all.length} items ready. Choose "Save to Files" to keep it.`;
+      return;
+    }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  $('backup-msg').className = 'small ok'; $('backup-msg').textContent = `Saved a backup of ${all.length} items.`;
+});
+$('import-file').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const list = Array.isArray(data) ? data : data.items;
+    if (!Array.isArray(list)) throw new Error();
+    let n = 0;
+    for (const it of list) if (it && it.id && it.name) { it.saved = true; await DB.put(it); n++; }
+    $('backup-msg').className = 'small ok'; $('backup-msg').textContent = `Restored ${n} items. Items already on this phone with the same ID were replaced.`;
+  } catch {
+    $('backup-msg').className = 'small err'; $('backup-msg').textContent = 'That file is not a Stash Scout backup.';
+  }
+});
+
+/* ---------- Start ---------- */
+show('scan');
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
