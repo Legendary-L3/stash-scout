@@ -365,7 +365,11 @@ label.field { display: grid; gap: 6px; font-weight: 600; font-size: .9rem; min-w
       <div id="price-error" class="notice bad" hidden>
         <b>Price search failed.</b>
         <p class="small" id="price-error-msg"></p>
-        <div class="row" style="margin-top:8px"><button class="btn" type="button" id="price-retry">Try again</button></div>
+        <p class="hint" id="price-error-detail" hidden></p>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" type="button" id="price-retry">Try again</button>
+          <button class="btn" type="button" id="price-estimate">Estimate without live search</button>
+        </div>
       </div>
       <div id="price-result" class="view" hidden>
         <div>
@@ -643,19 +647,72 @@ async function api(path, opts = {}) {
       (msg || `Request failed (${res.status}).`)
     );
     err.status = res.status;
+    err.detail = msg;
+    const retry = (data?.error?.details || []).find(d => d.retryDelay);
+    if (retry) err.retryDelay = retry.retryDelay;
     throw err;
   }
   return data;
 }
 
 // Ranks a model name so the newest stable Flash wins; returns -1 for models we don't want.
-function modelScore(name) {
+// With allowLite, Flash-Lite models are ranked too (below every full Flash), for use as fallbacks.
+function modelScore(name, allowLite) {
   const id = name.replace(/^models\//, '');
-  if (/lite|image|tts|audio|live|embed|robot|computer|8b|thinking|learnlm|gemma|aqa|veo|imagen|exp/i.test(id)) return -1;
+  if (!allowLite && /lite/i.test(id)) return -1;
+  if (/image|tts|audio|live|embed|robot|computer|8b|thinking|learnlm|gemma|aqa|veo|imagen|exp/i.test(id)) return -1;
   if (id === 'gemini-flash-latest') return 10000;
   const m = id.match(/^gemini-(\d+(?:\.\d+)?)-flash/);
   if (!m) return -1;
-  return parseFloat(m[1]) * 100 + (/preview/.test(id) ? 0 : 50) - (id.length / 1000);
+  return parseFloat(m[1]) * 100 + (/preview/.test(id) ? 0 : 50) - (id.length / 1000) - (/lite/i.test(id) ? 5000 : 0);
+}
+
+// Models to try for a request, best first. Free-tier limits differ per model (and Google Search
+// allowance differs most), so when one model refuses we move on to the next.
+async function candidateModels(preferKey) {
+  const out = [];
+  const add = m => { if (m && !out.includes(m)) out.push(m); };
+  const chosen = store.get('ss_model');
+  add(store.get(preferKey));
+  add(chosen);
+  add(await currentModel());
+  try {
+    const models = await listModels();
+    models.map(m => [m.id, modelScore(m.id, true)]).filter(x => x[1] >= 0)
+      .sort((a, b) => {
+        // Stable models before previews: their free limits are usually more generous.
+        const pa = /preview/.test(a[0]), pb = /preview/.test(b[0]);
+        return pa !== pb ? (pa ? 1 : -1) : b[1] - a[1];
+      })
+      .forEach(x => add(x[0]));
+  } catch {}
+  add('gemini-2.5-flash');
+  add('gemini-2.5-flash-lite');
+  return out.slice(0, 6);
+}
+
+// Errors where trying a different model can help.
+const tryNextModel = e => e.status === 429 || e.status === 404 || e.status >= 500 ||
+  (e.status === 400 && /model|search|ground|tool|not supported/i.test(e.detail || e.message));
+
+async function generateWithFallback(body, preferKey) {
+  const models = await candidateModels(preferKey);
+  let firstErr;
+  for (const model of models) {
+    try {
+      const data = await api(`/models/${model}:generateContent`, { method: 'POST', body: JSON.stringify(body) });
+      if (preferKey) store.set(preferKey, model);
+      data._model = model;
+      return data;
+    } catch (e) {
+      if (!e.status) throw e; // offline
+      if (e.status === 400 && /api key/i.test(e.detail || '')) throw e;
+      firstErr = firstErr || e;
+      if (!tryNextModel(e)) throw e;
+    }
+  }
+  firstErr.triedModels = models;
+  throw firstErr;
 }
 
 let modelListCache = null;
@@ -685,20 +742,7 @@ async function currentModel(forceRefresh) {
   return best;
 }
 
-async function generate(body) {
-  let model = await currentModel();
-  try {
-    return await api(`/models/${model}:generateContent`, { method: 'POST', body: JSON.stringify(body) });
-  } catch (e) {
-    // The saved automatic model may have been retired; look again once.
-    if ((e.status === 404 || e.status === 400 && /model/i.test(e.message)) && !store.get('ss_model')) {
-      modelListCache = null;
-      model = await currentModel(true);
-      return api(`/models/${model}:generateContent`, { method: 'POST', body: JSON.stringify(body) });
-    }
-    throw e;
-  }
-}
+const generate = body => generateWithFallback(body, 'ss_id_model');
 
 function responseText(data) {
   const parts = data?.candidates?.[0]?.content?.parts || [];
@@ -749,9 +793,9 @@ Rules:
   return r;
 }
 
-async function priceLookup(item) {
+async function priceLookup(item, { noSearch } = {}) {
   const cat = CATEGORIES[item.category] || CATEGORIES.other;
-  const prompt = `Search the web for what this collectible currently sells for, in US dollars.
+  const prompt = `${noSearch ? 'Estimate from what you know' : 'Search the web for'} what this collectible currently sells for, in US dollars.
 
 Item: ${item.name}
 Type: ${cat.label}
@@ -773,12 +817,13 @@ Reply with JSON only, no other text:
 }
 List up to 5 real comparable sales in "sales". If you find little data, give your best estimate and set confidence to "low".`;
 
-  const data = await generate({
+  const data = await generateWithFallback({
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    tools: [{ google_search: {} }],
+    ...(noSearch ? {} : { tools: [{ google_search: {} }] }),
     generationConfig: { temperature: 0.3 }
-  });
+  }, noSearch ? 'ss_id_model' : 'ss_price_model');
   const r = parseJson(responseText(data));
+  if (noSearch && r.confidence === 'high') r.confidence = 'medium';
   const gm = data?.candidates?.[0]?.groundingMetadata || {};
   const seen = new Set();
   const sources = (gm.groundingChunks || [])
@@ -798,6 +843,8 @@ List up to 5 real comparable sales in "sales". If you find little data, give you
     query: r.search_query || item.name,
     sources,
     searchHtml: gm.searchEntryPoint?.renderedContent || '',
+    model: data._model,
+    live: !noSearch,
     basis: { name: item.name, condition: item.condition, autographed: !!item.autographed, category: item.category },
     at: Date.now()
   };
@@ -968,7 +1015,7 @@ function renderCheckLinks() {
   const q = encodeURIComponent((draft.price?.query || draft.name || '') + (draft.autographed ? ' signed' : ''));
   const links = [
     ['eBay sold listings', `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1`],
-    ['Google', `https://www.google.com/search?q=${q}+price`]
+    ['Google AI Overview', `https://www.google.com/search?q=${q}+price`]
   ];
   if (['comic', 'trading_card', 'funko', 'video_game'].includes(draft.category)) links.splice(1, 0, ['PriceCharting', `https://www.pricecharting.com/search-products?q=${q}&type=prices`]);
   if (draft.category === 'vinyl') links.splice(1, 0, ['Discogs', `https://www.discogs.com/search/?q=${q}&type=all`]);
@@ -1007,27 +1054,38 @@ function renderPrice(state) {
   if (!chips.shadowRoot) chips.attachShadow({ mode: 'open' });
   chips.shadowRoot.innerHTML = p.searchHtml || '';
   const b = p.basis;
-  $('price-when').textContent = `Priced ${new Date(p.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} for ${gradeText(b.category, b.condition)}${b.autographed ? ', autographed' : ''}. AI estimates can be wrong, so check recent sales before buying or selling.`;
+  $('price-when').textContent = `Priced ${new Date(p.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} for ${gradeText(b.category, b.condition)}${b.autographed ? ', autographed' : ''}.${p.live === false ? ' This is an AI estimate from memory, not a live search, so prices may be out of date.' : ''} AI estimates can be wrong, so check recent sales before buying or selling.`;
 }
 
-async function fetchPrice() {
+async function fetchPrice(opts) {
   const token = ++priceToken;
   const target = draft;
   renderPrice('loading');
   try {
-    const p = await priceLookup(target);
+    const p = await priceLookup(target, opts);
     if (token !== priceToken || draft !== target) return;
     target.price = p;
     renderPrice();
     renderCheckLinks();
   } catch (e) {
     if (token !== priceToken || draft !== target) return;
-    $('price-error-msg').textContent = e.message || String(e);
+    let msg = e.message || String(e);
+    if (e.status === 429) {
+      msg = e.triedModels?.length > 1
+        ? `Google refused the live price search on all ${e.triedModels.length} Gemini models your key can use. Free keys get a small daily allowance for Google Search, and it may be used up or not offered for your key.`
+        : 'Google refused the live price search because a free usage limit was reached.';
+      msg += ' You can get an AI estimate without live search, or use the Google link below.';
+    }
+    $('price-error-msg').textContent = msg;
+    const det = [e.detail && e.detail !== e.message ? `Google says: ${e.detail.split('\n')[0].slice(0, 300)}` : '', e.retryDelay ? `Retry after ${e.retryDelay}.` : '', e.triedModels ? `Tried: ${e.triedModels.join(', ')}.` : ''].filter(Boolean).join(' ');
+    $('price-error-detail').textContent = det;
+    $('price-error-detail').hidden = !det;
     renderPrice('error');
   }
 }
-$('price-retry').addEventListener('click', fetchPrice);
-$('price-update').addEventListener('click', fetchPrice);
+$('price-retry').addEventListener('click', () => fetchPrice());
+$('price-update').addEventListener('click', () => fetchPrice());
+$('price-estimate').addEventListener('click', () => fetchPrice({ noSearch: true }));
 
 $('f-name').addEventListener('input', () => { draft.name = $('f-name').value.trim(); $('slab-title').textContent = draft.name || 'Untitled item'; if (draft.price) $('price-stale').hidden = !isStale(); });
 $('f-name').addEventListener('change', renderCheckLinks);
